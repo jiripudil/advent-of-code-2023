@@ -35,8 +35,6 @@ enum class Cube {
     blue
 }
 
-class InvalidInput : Throwable()
-
 class Game(val id: Int, private val showings: List<Showing>) {
     fun isPossible(maximums: Map<Cube, Int>) = showings.all { it.isPossible(maximums) }
 

@@ -1,5 +1,5 @@
 fun main() {
-    fun part1(input: List<String>): Int {
+    fun compute(input: List<String>): Pair<Int, Int> {
         var startingPipe: Pipe? = null
         val grid = buildMap {
             input.forEachIndexed { y, line ->
@@ -20,15 +20,15 @@ fun main() {
         }
 
         val visited = mutableSetOf<Coordinates>()
-        fun findLoop(pipe: Pipe, previous: Pipe, path: List<Pipe>): List<Pipe>? {
+        fun findLoop(pipe: Pipe, previous: Pipe, path: List<Coordinates>): List<Coordinates>? {
             if (visited.contains(pipe.coordinates)) {
-                return path + pipe
+                return path + pipe.coordinates
             }
 
             val connections = pipe.connections
-                .mapNotNull { grid[it] }
+                .mapNotNull { grid[pipe.coordinates.connect(it)] }
                 .filter { it != previous } // do not loop back immediately
-                .filter { it.connections.contains(pipe.coordinates) } // only those that actually connect back
+                .filter { it.connections.map { connection -> it.coordinates.connect(connection) }.contains(pipe.coordinates) } // only those that actually connect back
 
             if (connections.isEmpty()) {
                 return null
@@ -37,7 +37,7 @@ fun main() {
             visited.add(pipe.coordinates)
 
             connections.forEach {
-                val loop = findLoop(it, pipe, path + pipe)
+                val loop = findLoop(it, pipe, path + pipe.coordinates)
                 if (loop != null) {
                     return loop
                 }
@@ -47,39 +47,147 @@ fun main() {
         }
 
         val loop = findLoop(startingPipe!!, startingPipe!!, emptyList()) ?: throw InvalidInput()
-        return loop.size.floorDiv(2)
-    }
 
-    fun part2(input: List<String>): Int {
-        return input.size
+        val minX = loop.minOf { it.x }
+        val maxX = loop.maxOf { it.x }
+        val minY = loop.minOf { it.y }
+        val maxY = loop.maxOf { it.y }
+
+        fun listActualConnections(pipe: Pipe): List<PipeConnection> {
+            if (pipe.value != 'S') {
+                return pipe.connections
+            }
+
+            return pipe.connections.filter {
+                val next = pipe.coordinates.connect(it)
+                grid[next]?.connections?.contains(it.reverse()) ?: false
+            }
+        }
+
+        class Ray(val origin: Coordinates, val direction: PipeConnection) {
+            private val range = when (direction) {
+                PipeConnection.North -> (minY..<origin.y).reversed().map { Coordinates(origin.x, it) }
+                PipeConnection.South -> ((origin.y + 1)..maxY).map { Coordinates(origin.x, it) }
+                PipeConnection.East -> ((origin.x + 1)..maxX).map { Coordinates(it, origin.y) }
+                PipeConnection.West -> (minX..<origin.x).reversed().map { Coordinates(it, origin.y) }
+            }
+
+            fun countIntersections(): Int {
+                var count = 0
+                var pendingTurn: PipeConnection? = null
+
+                range.forEach { point ->
+                    if (!loop.contains(point)) {
+                        return@forEach
+                    }
+
+                    val pipe = grid.getValue(point)
+                    val connections = listActualConnections(pipe)
+
+                    if (connections.contains(direction) && connections.contains(direction.reverse())) {
+                        return@forEach
+                    }
+
+                    if (connections.contains(direction.perpendicular()) && connections.contains(direction.perpendicular().reverse())) {
+                        count++
+                        return@forEach
+                    }
+
+                    if (pendingTurn == null && !(connections - direction).contains(direction.reverse())) {
+                        pendingTurn = (connections - direction).first()
+                        count++
+
+                    } else if (pendingTurn != null && connections.contains(direction.reverse())) {
+                        if (pendingTurn == (connections - direction.reverse()).first()) {
+                            count++
+                        }
+
+                        pendingTurn = null
+                    }
+                }
+
+                return count
+            }
+        }
+
+        val enclosedPoints = mutableListOf<Coordinates>()
+        for (x in minX .. maxX) {
+            for (y in minY .. maxY) {
+                val point = Coordinates(x, y)
+                if (loop.contains(point)) {
+                    continue
+                }
+
+                val rays = listOf(
+                    Ray(point, PipeConnection.North),
+                    Ray(point, PipeConnection.South),
+                    Ray(point, PipeConnection.East),
+                    Ray(point, PipeConnection.West),
+                )
+
+                val isEnclosed = rays.all { ray -> ray.countIntersections() % 2 != 0 }
+                if (isEnclosed) {
+                    enclosedPoints += point
+                }
+            }
+        }
+
+        return Pair(
+            loop.size.floorDiv(2),
+            enclosedPoints.size
+        )
     }
 
     // test if implementation meets criteria from the description, like:
     val testInput = readInput("Day10_test")
-    //check(part1(testInput) == 8)
+    val (part1Test, part2Test) = compute(testInput)
+    check(part1Test == 8)
 
     val input = readInput("Day10")
-    part1(input).println()
-    //part2(input).println()
+    val (part1, part2) = compute(input)
+    part1.println()
+    part2.println()
 }
 
 data class Coordinates(val x: Int, val y: Int) {
-    fun west(): Coordinates = Coordinates(x - 1, y)
-    fun east(): Coordinates = Coordinates(x + 1, y)
-    fun north(): Coordinates = Coordinates(x, y - 1)
-    fun south(): Coordinates = Coordinates(x, y + 1)
+    fun connect(connection: PipeConnection): Coordinates {
+        return when (connection) {
+            PipeConnection.North -> Coordinates(x, y - 1)
+            PipeConnection.South -> Coordinates(x, y + 1)
+            PipeConnection.East -> Coordinates(x + 1, y)
+            PipeConnection.West -> Coordinates(x - 1, y)
+        }
+    }
+}
+
+enum class PipeConnection {
+    North, South, East, West;
+
+    fun reverse(): PipeConnection = when (this) {
+        North -> South
+        South -> North
+        East -> West
+        West -> East
+    }
+
+    fun perpendicular(): PipeConnection = when (this) {
+        North -> East
+        East -> South
+        South -> West
+        West -> North
+    }
 }
 
 data class Pipe(val coordinates: Coordinates, val value: Char) {
-    val connections: List<Coordinates> get() {
+    val connections: List<PipeConnection> get() {
         return when (value) {
-            '-' -> listOf(coordinates.east(), coordinates.west())
-            '|' -> listOf(coordinates.north(), coordinates.south())
-            'F' -> listOf(coordinates.east(), coordinates.south())
-            '7' -> listOf(coordinates.west(), coordinates.south())
-            'L' -> listOf(coordinates.east(), coordinates.north())
-            'J' -> listOf(coordinates.west(), coordinates.north())
-            'S' -> listOf(coordinates.east(), coordinates.west(), coordinates.north(), coordinates.south())
+            '-' -> listOf(PipeConnection.East, PipeConnection.West)
+            '|' -> listOf(PipeConnection.North, PipeConnection.South)
+            'F' -> listOf(PipeConnection.East, PipeConnection.South)
+            '7' -> listOf(PipeConnection.West, PipeConnection.South)
+            'L' -> listOf(PipeConnection.East, PipeConnection.North)
+            'J' -> listOf(PipeConnection.West, PipeConnection.North)
+            'S' -> listOf(PipeConnection.East, PipeConnection.West, PipeConnection.North, PipeConnection.South)
             else -> emptyList()
         }
     }

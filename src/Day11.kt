@@ -1,5 +1,5 @@
 fun main() {
-    fun part1(input: List<String>): Int {
+    fun compute(input: List<String>): Pair<Int, Long> {
         val galaxies = buildSet {
             input.forEachIndexed { y, line ->
                 line.forEachIndexed { x, char ->
@@ -34,20 +34,29 @@ fun main() {
             return diffX + diffY
         }
 
-        return pairs
-            .map { distanceBetween(it.first, it.second) }
-            .sum()
-    }
+        fun distanceBetweenExpanded(a: Pair<Int, Int>, b: Pair<Int, Int>): Long {
+            val x = listOf(a.first, b.first).sorted()
+            val y = listOf(a.second, b.second).sorted()
 
-    fun part2(input: List<String>): Int {
-        return input.size
+            val diffX = x[1] - x[0] + (emptyColumns.filter { it in x[0]..x[1] }.size * 999_999L)
+            val diffY = y[1] - y[0] + (emptyRows.filter { it in y[0]..y[1] }.size * 999_999L)
+
+            return diffX + diffY
+        }
+
+        return Pair(
+            pairs.map { distanceBetween(it.first, it.second) }.sum(),
+            pairs.map { distanceBetweenExpanded(it.first, it.second) }.sum()
+        )
     }
 
     // test if implementation meets criteria from the description, like:
     val testInput = readInput("Day11_test")
-    check(part1(testInput) == 374)
+    val (part1Test, part2Test) = compute(testInput)
+    check(part1Test == 374)
 
     val input = readInput("Day11")
-    part1(input).println()
-    part2(input).println()
+    val (part1, part2) = compute(input)
+    part1.println()
+    part2.println()
 }

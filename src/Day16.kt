@@ -1,5 +1,5 @@
 fun main() {
-    fun part1(input: List<String>): Int {
+    fun compute(input: List<String>): Pair<Int, Int> {
         val width = input[0].length
         val height = input.size
         val grid = buildMap {
@@ -103,24 +103,42 @@ fun main() {
             }
         }
 
-        val energized = mutableSetOf<Triple<Int, Int, BeamDirection>>()
-        beam(Pair(0, 0), BeamDirection.RIGHT, energized)
+        fun countEnergized(startingPosition: Pair<Int, Int>, startingDirection: BeamDirection): Int {
+            val energized = mutableSetOf<Triple<Int, Int, BeamDirection>>()
+            beam(startingPosition, startingDirection, energized)
+            return energized.map { Pair(it.first, it.second) }.toSet().size
+        }
 
-        val distinctEnergizedTiles = energized.map { Pair(it.first, it.second) }.toSet()
-        return distinctEnergizedTiles.size
-    }
+        val part1 = countEnergized(Pair(0, 0), BeamDirection.RIGHT)
 
-    fun part2(input: List<String>): Int {
-        return input.size
+        val configurations = buildList {
+            for (y in 0..<height) {
+                add(Triple(0, y, BeamDirection.RIGHT))
+                add(Triple(width - 1, y, BeamDirection.LEFT))
+            }
+
+            for (x in 0..<width) {
+                add(Triple(x, 0, BeamDirection.DOWN))
+                add(Triple(x, height - 1, BeamDirection.UP))
+            }
+        }
+
+        val results = configurations.map { Pair(it, countEnergized(Pair(it.first, it.second), it.third)) }
+        val part2 = results.maxOf { it.second }
+
+        return Pair(part1, part2)
     }
 
     // test if implementation meets criteria from the description, like:
     val testInput = readInput("Day16_test")
-    check(part1(testInput) == 46)
+    val (part1Test, part2Test) = compute(testInput)
+    check(part1Test == 46)
+    check(part2Test == 51)
 
     val input = readInput("Day16")
-    part1(input).println()
-    part2(input).println()
+    val (part1, part2) = compute(input)
+    part1.println()
+    part2.println()
 }
 
 enum class BeamDirection { LEFT, RIGHT, UP, DOWN }
